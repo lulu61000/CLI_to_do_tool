@@ -31,7 +31,7 @@ export default function App() {
           name="MyMusic"
           component={MymusicScreen}
           options={{
-            title: 'Now Playing',
+            title: 'I am Listening to',
             headerStyle: {
               backgroundColor: '#000',
             },
