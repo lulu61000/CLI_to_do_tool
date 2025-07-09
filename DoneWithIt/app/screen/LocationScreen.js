@@ -3,21 +3,40 @@ import { StyleSheet, Text, View, Alert, ActivityIndicator, Image } from 'react-n
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 
-const MUSIC_DATA_KEY = '@music_data'; //key from Mymusic.js
+const MUSIC_DATA_KEY = '@music_data';//key from Mymusic.js
+const LOCATION_HISTORY_KEY = '@location_history';
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) { // distance check
+  const R = 6371;
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  return d;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
 
 function LocationScreen() {
+    //Add state to hold all info
     const [location, setLocation] = useState(null);
-    const [errorMsg, setErrorMsg] = useState(null);
-    //Add state to hold all music info
     const [musicImageUri, setMusicImageUri] = useState(null);
     const [songTitle, setSongTitle] = useState('');
     const [artistName, setArtistName] = useState('');
+    const [locationHistory, setLocationHistory] = useState([]);
 
     useEffect(() => {
         (async () => {
-            //Load the saved image
             try {
+                //Load the saved image
                 const savedDataJSON = await AsyncStorage.getItem(MUSIC_DATA_KEY);
                 if (savedDataJSON !== null) {
                     const savedData = JSON.parse(savedDataJSON);
@@ -25,14 +44,23 @@ function LocationScreen() {
                     setSongTitle(savedData.songTitle);
                     setArtistName(savedData.artistName);
                 }
-            } catch (e) {
-                console.log('Failed to load music data for marker.');
-            }
 
+                const savedLocationHistory = JSON.parse(await AsyncStorage.getItem(LOCATION_HISTORY_KEY));
+                if (savedLocationHistory) {
+                    const now = Date.now();
+                    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+                    const recentHistory = savedLocationHistory.filter(
+                        (loc) => loc.timestamp > twentyFourHoursAgo
+                    );
+                    setLocationHistory(recentHistory);
+                }
+            } catch (e) {
+                console.log('Failed to load data from storage.');
+            }
             //permissions
             let { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                setErrorMsg('Permission to access location was denied.');
+                Alert.alert('Permission to access location was denied.');
                 return;
             }
 
@@ -40,26 +68,48 @@ function LocationScreen() {
                 let currentPosition = await Location.getCurrentPositionAsync({});
                 setLocation(currentPosition);
             } catch (error) {
-                setErrorMsg('Could not fetch location.');
+                Alert.alert('Could not fetch location.');
             }
         })();
     }, []);
+ // Loading hsitory locations
+    useEffect(() => {
+        if (location) {
+            const lastLocation = locationHistory.length > 0 ? locationHistory[locationHistory.length - 1] : null;
+            let shouldSaveNewLocation = true;
 
-    // Loading indicator
+            if (lastLocation) {
+                const distance = getDistanceFromLatLonInKm(
+                    lastLocation.latitude,
+                    lastLocation.longitude,
+                    location.coords.latitude,
+                    location.coords.longitude
+                );
+                if (distance <= 1) {
+                    shouldSaveNewLocation = false;
+                }
+            }
+
+            if (shouldSaveNewLocation) {
+                const newLocationRecord = {
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                    timestamp: location.timestamp,
+                    deviceId: Device.osInternalBuildId,
+                };
+
+                const updatedHistory = [...locationHistory, newLocationRecord];
+                setLocationHistory(updatedHistory);
+                AsyncStorage.setItem(LOCATION_HISTORY_KEY, JSON.stringify(updatedHistory));
+            }
+        }
+    }, [location]);
+
     if (!location) {
         return (
             <View style={styles.centered}>
                 <ActivityIndicator size="large" color="#0000ff" />
                 <Text>Finding your location...</Text>
-            </View>
-        );
-    }
-
-    // Error m
-    if (errorMsg) {
-        return (
-            <View style={styles.centered}>
-                <Text>{errorMsg}</Text>
             </View>
         );
     }
@@ -75,15 +125,23 @@ function LocationScreen() {
                     longitudeDelta: 0.01,
                 }}
             >
+                {locationHistory.map((historicalLocation) => (
+                    <Marker
+                        key={historicalLocation.timestamp}
+                        coordinate={historicalLocation}
+                        pinColor="tan"
+                        title={`Visited at ${new Date(historicalLocation.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                    />
+                ))}
+
                 <Marker
                     coordinate={{
                         latitude: location.coords.latitude,
                         longitude: location.coords.longitude,
                     }}
                     title={"You"}
-                    description={"Listening: "+songTitle + " by: "+artistName+" JOIN NOW"}
+                    description={"Listening: " + songTitle + " by: " + artistName + " JOIN NOW"}
                 >
-                    {/* If we have a image, display it. Otherwise the default red pin. */}
                     {musicImageUri && (
                         <Image
                             source={{ uri: musicImageUri }}

@@ -3,16 +3,15 @@ import { StyleSheet, View, Image, Text, TextInput, TouchableOpacity, Alert, Plat
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// A key to identify data in user phone's storage
+// A key
 const MUSIC_DATA_KEY = '@music_data';
 
 function Mymusic() {
-    // State to hold the data
+    // State to hold data
     const [imageUri, setImageUri] = useState(null);
     const [songTitle, setSongTitle] = useState('');
     const [artistName, setArtistName] = useState('');
 
-    // useEffect hook runs only once 
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -29,7 +28,7 @@ function Mymusic() {
         };
 
         loadData();
-        // Request permissions
+        // permissions
         (async () => {
             if (Platform.OS !== 'web') {
                 const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -38,9 +37,9 @@ function Mymusic() {
                 }
             }
         })();
-    }, []); // Empty array means this runs only on the initial mount
+    }, []); 
 
-    // runs every time the data changes
+    // runs when data changes
     useEffect(() => {
         const saveData = async () => {
             try {
@@ -53,7 +52,7 @@ function Mymusic() {
         };
 
         saveData();
-    }, [imageUri, songTitle, artistName]); // Dependency array runs this whenever these values change
+    }, [imageUri, songTitle, artistName]);
 
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
